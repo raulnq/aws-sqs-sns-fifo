@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  SAM
+
+Resources:
+
+  SNSFifoTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: MyFifoTopic.fifo
+      FifoTopic: true
+      ContentBasedDeduplication: false
+
+  SQSFifoQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MyFifoQueue.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: false
+      DeduplicationScope: messageGroup
+      FifoThroughputLimit: perMessageGroupId
+
+  SNSFifoSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref SNSFifoTopic
+      Protocol: sqs
+      Endpoint: !GetAtt SQSFifoQueue.Arn
+      RawMessageDelivery: true
+
+  # Grant permission for SNS to send messages to the SQS queue
+  SQSPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref SQSFifoQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: "sqs:SendMessage"
+            Resource: !GetAtt SQSFifoQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref SNSFifoTopic
+
+Outputs:
+  SNSFifoTopicArn:
+    Description: ARN of the SNS FIFO Topic
+    Value: !Ref SNSFifoTopic
+
+  SQSFifoQueueArn:
+    Description: URL of the SQS FIFO Queue
+    Value: !Ref SQSFifoQueue
